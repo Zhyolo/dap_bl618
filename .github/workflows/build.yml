@@ -1,0 +1,49 @@
+name: build
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    # The CMake configure and build commands are platform agnostic and should work equally well on Windows or Mac.
+    # You can convert this to a matrix build if you need cross-platform coverage.
+    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Cache toolchain
+      id: cache
+      uses: actions/cache@v1
+      with: 
+        path: /opt/riscv64-unknown-elf
+        key : ${{runner.OS}}-riscv64-unknown-elf-caches-v1-${{ hashFiles('bin/riscv64-unknown-elf-gcc') }}
+
+    - name: Download toolchain
+      if: steps.cache.outputs.cache-hit != 'true'
+      run: |
+        git clone https://gitee.com/bouffalolab/toolchain_gcc_t-head_linux.git
+        mv -f toolchain_gcc_t-head_linux /opt/riscv64-unknown-elf
+    
+    - name: Download sdk
+      run: |
+        git clone https://github.com/bouffalolab/bouffalo_sdk.git
+        mv -f bouffalo_sdk ./../bouffalo_sdk
+
+    - name: Build case
+      # Build your program with the given configuration
+      run: |
+        PATH="$PATH:/opt/riscv64-unknown-elf/bin"
+        make CHIP=bl616 BOARD=bl616dk
+    
+    - name: Archive code coverage results
+      uses: actions/upload-artifact@v4
+      with:
+        name: dap_bl618.bin
+        path: build/build_out/dap_bl616.bin
