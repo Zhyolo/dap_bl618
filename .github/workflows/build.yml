@@ -28,7 +28,7 @@ jobs:
     - name: Download toolchain
       if: steps.cache.outputs.cache-hit != 'true'
       run: |
-        git clone https://gitee.com/bouffalolab/toolchain_gcc_t-head_linux.git
+        git clone https://github.com/bouffalolab/toolchain_gcc_t-head_linux.git
         mv -f toolchain_gcc_t-head_linux /opt/riscv64-unknown-elf
     
     - name: Download sdk
