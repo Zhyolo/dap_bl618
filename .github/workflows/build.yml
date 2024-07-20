@@ -33,7 +33,7 @@ jobs:
     
     - name: Download sdk
       run: |
-        git clone https://github.com/bouffalolab/bouffalo_sdk.git
+        git clone --depth 1 --branch V2.0.0 https://github.com/bouffalolab/bouffalo_sdk.git
         mv -f bouffalo_sdk ./../bouffalo_sdk
 
     - name: Build case
