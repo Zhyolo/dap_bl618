@@ -1,0 +1,6 @@
+[submodule "CherryUSB"]
+	path = CherryUSB
+	url = https://github.com/cherry-embedded/CherryUSB.git
+[submodule "CMSIS_DAP"]
+	path = CMSIS_DAP
+	url = https://github.com/ARM-software/CMSIS-DAP.git
