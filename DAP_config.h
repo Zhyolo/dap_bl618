@@ -44,13 +44,6 @@ This information includes:
  - Optional information about a connected Target Device (for Evaluation Boards).
 */
 
-#ifdef _RTE_
-#include "RTE_Components.h"
-#include CMSIS_device_header
-#else
-// #include "device.h"                             // Debug Unit Cortex-M Processor Header File
-#endif
-
 #include <stdint.h>
 
 #ifndef __STATIC_INLINE
@@ -65,7 +58,7 @@ This information includes:
 
 /// Processor Clock of the Cortex-M MCU used in the Debug Unit.
 /// This value is used to calculate the SWD/JTAG clock speed.
-#define CPU_CLOCK               100000000U      ///< Specifies the CPU Clock in Hz.
+#define CPU_CLOCK               320000000U      ///< Specifies the CPU Clock in Hz.
 
 /// Number of processor cycles for I/O Port write operations.
 /// This value is used to calculate the SWD/JTAG clock speed that is generated with I/O
@@ -110,7 +103,7 @@ This information includes:
 
 /// Indicate that UART Serial Wire Output (SWO) trace is available.
 /// This information is returned by the command \ref DAP_Info as part of <b>Capabilities</b>.
-#define SWO_UART                1               ///< SWO UART:  1 = available, 0 = not available.
+#define SWO_UART                0               ///< SWO UART:  1 = available, 0 = not available.
 
 /// USART Driver instance number for the UART SWO.
 #define SWO_UART_DRIVER         0               ///< USART Driver instance number (Driver_USART#).
@@ -133,7 +126,7 @@ This information includes:
 
 /// Indicate that UART Communication Port is available.
 /// This information is returned by the command \ref DAP_Info as part of <b>Capabilities</b>.
-#define DAP_UART                1               ///< DAP UART:  1 = available, 0 = not available.
+#define DAP_UART                0               ///< DAP UART:  1 = available, 0 = not available.
 
 /// USART Driver instance number for the UART Communication Port.
 #define DAP_UART_DRIVER         1               ///< USART Driver instance number (Driver_USART#).
@@ -311,14 +304,33 @@ of the same I/O port. The following SWDIO I/O Pin functions are provided:
 
 
 // Configure DAP I/O pins ------------------------------
+#include "bflb_gpio.h"
+
+#define PIN_TCK      10
+#define PIN_TMS      12
+#define PIN_TDI      14
+#define PIN_TDO      16
+#define PIN_nRESET    24
+
+extern struct bflb_device_s *g_gpio;
 
 /** Setup JTAG I/O pins: TCK, TMS, TDI, TDO, nTRST, and nRESET.
 Configures the DAP Hardware I/O pins for JTAG mode:
  - TCK, TMS, TDI, nTRST, nRESET to output mode and set to high level.
  - TDO to input mode.
 */
-__STATIC_INLINE void PORT_JTAG_SETUP (void) {
-  ;
+__STATIC_INLINE void PORT_JTAG_SETUP(void)
+{
+  bflb_gpio_init(g_gpio, PIN_TCK, GPIO_OUTPUT | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
+  bflb_gpio_init(g_gpio, PIN_TMS, GPIO_OUTPUT | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
+  bflb_gpio_init(g_gpio, PIN_TDI, GPIO_OUTPUT | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
+  bflb_gpio_init(g_gpio, PIN_TDO, GPIO_INPUT | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
+  bflb_gpio_init(g_gpio, PIN_nRESET, GPIO_OUTPUT | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
+
+  bflb_gpio_set(g_gpio, PIN_TCK);
+  bflb_gpio_set(g_gpio, PIN_TMS);
+  bflb_gpio_set(g_gpio, PIN_TDI);
+  bflb_gpio_set(g_gpio, PIN_nRESET);
 }
 
 /** Setup SWD I/O pins: SWCLK, SWDIO, and nRESET.
@@ -327,7 +339,11 @@ Configures the DAP Hardware I/O pins for Serial Wire Debug (SWD) mode:
  - TDI, nTRST to HighZ mode (pins are unused in SWD mode).
 */
 __STATIC_INLINE void PORT_SWD_SETUP (void) {
-  ;
+  bflb_gpio_init(g_gpio, PIN_TCK, GPIO_OUTPUT | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
+  bflb_gpio_init(g_gpio, PIN_TMS, GPIO_OUTPUT | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
+
+  bflb_gpio_set(g_gpio, PIN_TCK);
+  bflb_gpio_set(g_gpio, PIN_TMS);
 }
 
 /** Disable JTAG/SWD I/O Pins.
@@ -335,7 +351,11 @@ Disables the DAP Hardware I/O pins which configures:
  - TCK/SWCLK, TMS/SWDIO, TDI, TDO, nTRST, nRESET to High-Z mode.
 */
 __STATIC_INLINE void PORT_OFF (void) {
-  ;
+  bflb_gpio_init(g_gpio, PIN_TCK, GPIO_INPUT | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
+  bflb_gpio_init(g_gpio, PIN_TMS, GPIO_INPUT | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
+  bflb_gpio_init(g_gpio, PIN_TDI, GPIO_INPUT | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
+  bflb_gpio_init(g_gpio, PIN_TDO, GPIO_INPUT | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
+  bflb_gpio_init(g_gpio, PIN_nRESET, GPIO_INPUT | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
 }
 
 
@@ -345,21 +365,21 @@ __STATIC_INLINE void PORT_OFF (void) {
 \return Current status of the SWCLK/TCK DAP hardware I/O pin.
 */
 __STATIC_FORCEINLINE uint32_t PIN_SWCLK_TCK_IN  (void) {
-  return (0U);
+  return bflb_gpio_read(g_gpio, PIN_TCK);
 }
 
 /** SWCLK/TCK I/O pin: Set Output to High.
 Set the SWCLK/TCK DAP hardware I/O pin to high level.
 */
 __STATIC_FORCEINLINE void     PIN_SWCLK_TCK_SET (void) {
-  ;
+  bflb_gpio_set(g_gpio, PIN_TCK);
 }
 
 /** SWCLK/TCK I/O pin: Set Output to Low.
 Set the SWCLK/TCK DAP hardware I/O pin to low level.
 */
 __STATIC_FORCEINLINE void     PIN_SWCLK_TCK_CLR (void) {
-  ;
+  bflb_gpio_reset(g_gpio, PIN_TCK);
 }
 
 
@@ -369,35 +389,38 @@ __STATIC_FORCEINLINE void     PIN_SWCLK_TCK_CLR (void) {
 \return Current status of the SWDIO/TMS DAP hardware I/O pin.
 */
 __STATIC_FORCEINLINE uint32_t PIN_SWDIO_TMS_IN  (void) {
-  return (0U);
+  return bflb_gpio_read(g_gpio, PIN_TMS);
 }
 
 /** SWDIO/TMS I/O pin: Set Output to High.
 Set the SWDIO/TMS DAP hardware I/O pin to high level.
 */
 __STATIC_FORCEINLINE void     PIN_SWDIO_TMS_SET (void) {
-  ;
+  bflb_gpio_set(g_gpio, PIN_TMS);
 }
 
 /** SWDIO/TMS I/O pin: Set Output to Low.
 Set the SWDIO/TMS DAP hardware I/O pin to low level.
 */
 __STATIC_FORCEINLINE void     PIN_SWDIO_TMS_CLR (void) {
-  ;
+  bflb_gpio_reset(g_gpio, PIN_TMS);
 }
 
 /** SWDIO I/O pin: Get Input (used in SWD mode only).
 \return Current status of the SWDIO DAP hardware I/O pin.
 */
 __STATIC_FORCEINLINE uint32_t PIN_SWDIO_IN      (void) {
-  return (0U);
+  return bflb_gpio_read(g_gpio, PIN_TMS);
 }
 
 /** SWDIO I/O pin: Set Output (used in SWD mode only).
 \param bit Output value for the SWDIO DAP hardware I/O pin.
 */
 __STATIC_FORCEINLINE void     PIN_SWDIO_OUT     (uint32_t bit) {
-  ;
+  if(bit & 0x01)
+    bflb_gpio_set(g_gpio, PIN_TMS);
+  else
+    bflb_gpio_reset(g_gpio, PIN_TMS);
 }
 
 /** SWDIO I/O pin: Switch to Output mode (used in SWD mode only).
@@ -405,7 +428,7 @@ Configure the SWDIO DAP hardware I/O pin to output mode. This function is
 called prior \ref PIN_SWDIO_OUT function calls.
 */
 __STATIC_FORCEINLINE void     PIN_SWDIO_OUT_ENABLE  (void) {
-  ;
+  bflb_gpio_init(g_gpio, PIN_TMS, GPIO_OUTPUT | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
 }
 
 /** SWDIO I/O pin: Switch to Input mode (used in SWD mode only).
@@ -413,7 +436,7 @@ Configure the SWDIO DAP hardware I/O pin to input mode. This function is
 called prior \ref PIN_SWDIO_IN function calls.
 */
 __STATIC_FORCEINLINE void     PIN_SWDIO_OUT_DISABLE (void) {
-  ;
+  bflb_gpio_init(g_gpio, PIN_TMS, GPIO_INPUT | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
 }
 
 
@@ -423,14 +446,17 @@ __STATIC_FORCEINLINE void     PIN_SWDIO_OUT_DISABLE (void) {
 \return Current status of the TDI DAP hardware I/O pin.
 */
 __STATIC_FORCEINLINE uint32_t PIN_TDI_IN  (void) {
-  return (0U);
+  return bflb_gpio_read(g_gpio, PIN_TDI);
 }
 
 /** TDI I/O pin: Set Output.
 \param bit Output value for the TDI DAP hardware I/O pin.
 */
 __STATIC_FORCEINLINE void     PIN_TDI_OUT (uint32_t bit) {
-  ;
+  if(bit & 0x01)
+    bflb_gpio_set(g_gpio, PIN_TDI);
+  else
+    bflb_gpio_reset(g_gpio, PIN_TDI);
 }
 
 
@@ -440,7 +466,7 @@ __STATIC_FORCEINLINE void     PIN_TDI_OUT (uint32_t bit) {
 \return Current status of the TDO DAP hardware I/O pin.
 */
 __STATIC_FORCEINLINE uint32_t PIN_TDO_IN  (void) {
-  return (0U);
+  return bflb_gpio_read(g_gpio, PIN_TDO);
 }
 
 
@@ -529,8 +555,7 @@ default, the DWT timer is used.  The frequency of this timer is configured with 
 \return Current timestamp value.
 */
 __STATIC_INLINE uint32_t TIMESTAMP_GET (void) {
-  // return (DWT->CYCCNT);
-  return 0;
+  return bflb_mtimer_get_time_us();
 }
 
 ///@}

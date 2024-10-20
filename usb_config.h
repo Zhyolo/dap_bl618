@@ -271,5 +271,5 @@
 /* ---------------- MUSB Configuration ---------------- */
 // #define CONFIG_USB_MUSB_SUNXI
 
-#define CONFIG_USBDEV_ADVANCE_DESC
+// #define CONFIG_USBDEV_ADVANCE_DESC
 #endif

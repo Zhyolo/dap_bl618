@@ -4,8 +4,6 @@ include(proj.conf)
 
 find_package(bouffalo_sdk REQUIRED HINTS $ENV{BL_SDK_BASE})
 
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
 target_sources(app PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/CMSIS_DAP/Firmware/Source/DAP_vendor.c
     ${CMAKE_CURRENT_SOURCE_DIR}/CMSIS_DAP/Firmware/Source/DAP.c
@@ -26,6 +24,10 @@ sdk_add_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/CherryUSB/core)
 sdk_add_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/CherryUSB/class/cdc)
 sdk_add_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/CherryUSB/class/msc)
 sdk_add_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/CherryUSB/class/hid)
+
+target_sources(app PRIVATE
+    cmsis_dap.c
+)
 
 sdk_add_compile_definitions(-DCONFIG_BOARD_FLASH_INIT_SKIP)
 sdk_set_main_file(main.c)
