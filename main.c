@@ -1,17 +1,17 @@
-#include "bflb_mtimer.h"
 #include "board.h"
-
-#define DBG_TAG "MAIN"
-#include "log.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#include "tasks.h"
+#include "winusb_cdc.h"
 
 int main(void)
 {
     board_init();
 
-    printf("hello world\r\n");
+    shell_task_init();
 
-    extern void winusbv2_init(uint8_t busid, uintptr_t reg_base);
-    winusbv2_init(0, 0x20072000);
-    while (1) {
-    }
+    winusb_cdc_init(0, 0x20072000);
+    printf("Hello, World!\n");
+    vTaskStartScheduler();
+    return 0;
 }

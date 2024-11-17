@@ -4,3 +4,6 @@
 [submodule "CMSIS_DAP"]
 	path = CMSIS_DAP
 	url = https://github.com/ARM-software/CMSIS-DAP.git
+[submodule "letter_shell"]
+	path = letter_shell
+	url = https://github.com/NevermindZZT/letter-shell.git

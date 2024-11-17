@@ -6,32 +6,32 @@
 #include "usbd_core.h"
 #include "usbd_cdc_acm.h"
 
-#define WINUSB_IN_EP  0x81
-#define WINUSB_OUT_EP 0x02
+#define WINUSB_IN_EP        0x81
+#define WINUSB_OUT_EP       0x02
 
-#define CDC_IN_EP  0x83
-#define CDC_OUT_EP 0x04
-#define CDC_INT_EP 0x85
+#define CDC_IN_EP           0x83
+#define CDC_OUT_EP          0x04
+#define CDC_INT_EP          0x85
 
-#define USBD_VID           0x0D28
-#define USBD_PID           0x0204
-#define USBD_MAX_POWER     500
-#define USBD_LANGID_STRING 1033
+#define USBD_VID            0x0D28
+#define USBD_PID            0x0204
+#define USBD_MAX_POWER      500
+#define USBD_LANGID_STRING  1033
 
-#define USB_CONFIG_SIZE (9 + 9 + 7 + 7 + CDC_ACM_DESCRIPTOR_LEN)
-#define INTF_NUM        3
+#define USB_CONFIG_SIZE     (9 + 9 + 7 + 7 + CDC_ACM_DESCRIPTOR_LEN)
+#define INTF_NUM            3
 
 #ifdef CONFIG_USB_HS
-#define WINUSB_EP_MPS 512
+#define WINUSB_EP_MPS       512
 #else
-#define WINUSB_EP_MPS 64
+#define WINUSB_EP_MPS       64
 #endif
 
 #define USBD_WINUSB_VENDOR_CODE 0x20
 
-#define USBD_WEBUSB_ENABLE 0
-#define USBD_BULK_ENABLE   1
-#define USBD_WINUSB_ENABLE 1
+#define USBD_WEBUSB_ENABLE      0
+#define USBD_BULK_ENABLE        1
+#define USBD_WINUSB_ENABLE      1
 
 /* WinUSB Microsoft OS 2.0 descriptor sizes */
 #define WINUSB_DESCRIPTOR_SET_HEADER_SIZE  10
@@ -72,7 +72,7 @@ __ALIGN_BEGIN const uint8_t USBD_WinUSBDescriptorSetDescriptor[] = {
     '4', 0, '6', 0, 'F', 0, 'E', 0, '-', 0,
     '9', 0, '3', 0, '3', 0, 'B', 0, '-',
     0, '3', 0, '1', 0, 'C', 0, 'B', 0, '9', 0, 'C', 0, '5', 0, 'A', 0, 'A', 0, '3', 0, 'B', 0, '9', 0,
-    '}', 0, 0, 0, 0, 0
+    '}', 0, 0, 0, 0, 0,
 #endif
 #if USBD_BULK_ENABLE
     WBVAL(WINUSB_FUNCTION_SUBSET_HEADER_SIZE), /* wLength */
@@ -216,13 +216,14 @@ const uint8_t winusbv2_descriptor[] = {
     0x00
 };
 
-USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX uint8_t read_buffer[2048];
-USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX uint8_t write_buffer[2048];
+USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX uint8_t winusb_read_buf[WINUSB_EP_MPS];
+USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX uint8_t cdc_read_buf[WINUSB_EP_MPS];
 
-USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX uint8_t cdc_read_buffer[2048];
-USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX uint8_t cdc_write_buffer[2048];
+static void (*winusb_rx_cb)(uint8_t *, uint32_t) = NULL;
+static void (*winusb_tx_done)(void) = NULL;
 
-volatile bool ep_tx_busy_flag = false;
+static void (*cdc_rx_cb)(uint8_t *, uint32_t) = NULL;
+static void (*cdc_tx_done)(void) = NULL;
 
 static void usbd_event_handler(uint8_t busid, uint8_t event)
 {
@@ -238,9 +239,9 @@ static void usbd_event_handler(uint8_t busid, uint8_t event)
         case USBD_EVENT_SUSPEND:
             break;
         case USBD_EVENT_CONFIGURED:
-            ep_tx_busy_flag = false;
             /* setup first out ep read transfer */
-            usbd_ep_start_read(busid, WINUSB_OUT_EP, read_buffer, 2048);
+            usbd_ep_start_read(busid, WINUSB_OUT_EP, winusb_read_buf, sizeof(winusb_read_buf));
+            usbd_ep_start_read(busid, CDC_OUT_EP, cdc_read_buf, sizeof(cdc_read_buf));
             break;
         case USBD_EVENT_SET_REMOTE_WAKEUP:
             break;
@@ -252,47 +253,50 @@ static void usbd_event_handler(uint8_t busid, uint8_t event)
     }
 }
 
-void usbd_winusb_out(uint8_t busid, uint8_t ep, uint32_t nbytes)
+static void usbd_winusb_out(uint8_t busid, uint8_t ep, uint32_t nbytes)
 {
-    USB_LOG_RAW("actual out len:%d\r\n", nbytes);
-    for (int i = 0; i < nbytes; i++) {
-        printf("%02x ", read_buffer[i]);
+    if(NULL != winusb_rx_cb)
+    {
+        winusb_rx_cb(winusb_read_buf, nbytes);
     }
-    printf("\r\n");
-    //usbd_ep_start_write(busid, WINUSB_IN_EP, read_buffer, nbytes);
     /* setup next out ep read transfer */
-    usbd_ep_start_read(busid, WINUSB_OUT_EP, read_buffer, 2048);
+    usbd_ep_start_read(busid, WINUSB_OUT_EP, winusb_read_buf, sizeof(winusb_read_buf));
 }
 
-void usbd_winusb_in(uint8_t busid, uint8_t ep, uint32_t nbytes)
+static void usbd_winusb_in(uint8_t busid, uint8_t ep, uint32_t nbytes)
 {
-    USB_LOG_RAW("actual in len:%d\r\n", nbytes);
-
     if ((nbytes % usbd_get_ep_mps(busid, ep)) == 0 && nbytes) {
         /* send zlp */
         usbd_ep_start_write(busid, WINUSB_IN_EP, NULL, 0);
     } else {
-        ep_tx_busy_flag = false;
+        if(NULL != winusb_tx_done)
+        {
+            winusb_tx_done();
+        }
     }
 }
 
-void usbd_cdc_acm_bulk_out(uint8_t busid, uint8_t ep, uint32_t nbytes)
+static void usbd_cdc_acm_bulk_out(uint8_t busid, uint8_t ep, uint32_t nbytes)
 {
-    /* setup next out ep read transfer */
-    if (1) {
-        usbd_ep_start_read(0, CDC_OUT_EP, cdc_read_buffer, 2048);
-        printf("cdc out len:%d\r\n", nbytes);
+    /* TODO: handle cdc read data */
+    if(NULL != cdc_rx_cb)
+    {
+        cdc_rx_cb(cdc_read_buf, nbytes);
     }
+
+    usbd_ep_start_read(busid, CDC_OUT_EP, cdc_read_buf, sizeof(cdc_read_buf));
 }
 
-void usbd_cdc_acm_bulk_in(uint8_t busid, uint8_t ep, uint32_t nbytes)
+static void usbd_cdc_acm_bulk_in(uint8_t busid, uint8_t ep, uint32_t nbytes)
 {
-    if ((nbytes % 2048) == 0 && nbytes) {
+    if ((nbytes % usbd_get_ep_mps(busid, ep)) == 0 && nbytes) {
         /* send zlp */
         usbd_ep_start_write(0, CDC_IN_EP, NULL, 0);
-        printf("cdc in len:%d\r\n", nbytes);
     } else {
-        ep_tx_busy_flag = false;
+        if(NULL != cdc_tx_done)
+        {
+            cdc_tx_done();
+        }
     }
 }
 
@@ -331,7 +335,7 @@ struct usb_bos_descriptor bos_desc = {
     .string_len = USBD_BOS_WTOTALLENGTH
 };
 
-void winusbv2_init(uint8_t busid, uintptr_t reg_base)
+void winusb_cdc_init(uint8_t busid, uintptr_t reg_base)
 {
     usbd_desc_register(busid, winusbv2_descriptor);
     usbd_bos_desc_register(busid, &bos_desc);
@@ -349,4 +353,26 @@ void winusbv2_init(uint8_t busid, uintptr_t reg_base)
     usbd_add_endpoint(busid, &cdc_in_ep);
 
     usbd_initialize(busid, reg_base, usbd_event_handler);
+}
+
+void winusb_register_cb(void (*rx_cb)(uint8_t *data, uint32_t len), void (*tx_done)(void))
+{
+    winusb_rx_cb = rx_cb;
+    winusb_tx_done = tx_done;
+}
+
+void winusb_send(uint8_t *buf, uint32_t len)
+{
+    usbd_ep_start_write(0, WINUSB_IN_EP, buf, len);
+}
+
+void cdc_register_cb(void (*rx_cb)(uint8_t *data, uint32_t len), void (*tx_done)(void))
+{
+    cdc_rx_cb = rx_cb;
+    cdc_tx_done = tx_done;
+}
+
+void cdc_send(uint8_t *buf, uint32_t len)
+{
+    usbd_ep_start_write(0, CDC_IN_EP, buf, len);
 }
