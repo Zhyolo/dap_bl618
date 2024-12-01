@@ -36,6 +36,8 @@ sdk_add_compile_definitions(-DSHELL_CFG_USER="shell_config_user.h")
 sdk_add_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/letter_shell/src)
 
 target_sources(app PRIVATE
+    fatfs_cmd.c
+    sd_card.c
     winusb_cdc.c
     ring_buffer.c
     shell_task.c

@@ -100,6 +100,14 @@ static void shell_task(void *pvParameters)
     shell.write = shell_write;
     shell.lock = shell_lock;
     shell.unlock = shell_unlock;
+
+    xEventGroupWaitBits(
+        cdc_evt_handle,
+        CDC_EVT_RX_DONE,
+        pdTRUE,
+        pdFALSE,
+        portMAX_DELAY);
+
     shellInit(&shell, shell_buffer, sizeof(shell_buffer));
 
     while (1)
