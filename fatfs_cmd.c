@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define printf(fmt, ...) shellPrint(shellGetCurrent(), fmt, ##__VA_ARGS__)
+
 static FRESULT ls_path(char *path)
 {
     FRESULT res;

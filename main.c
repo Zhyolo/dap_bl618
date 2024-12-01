@@ -4,11 +4,11 @@
 #include "tasks.h"
 #include "winusb_cdc.h"
 
+#include <stdio.h>
+
 int main(void)
 {
     board_init();
-    
-    printf("Hello, World!\n");
 
     extern int filesystem_init(void);
     if(0 != filesystem_init())
