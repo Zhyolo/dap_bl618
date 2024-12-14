@@ -3,6 +3,7 @@
 #include "task.h"
 #include "tasks.h"
 #include "winusb_cdc.h"
+#include "cmsis_dap.h"
 
 #include <stdio.h>
 
@@ -17,6 +18,7 @@ int main(void)
     }
 
     shell_task_init();
+    cmsis_dap_init();
 
     winusb_cdc_init(0, 0x20072000);
     vTaskStartScheduler();

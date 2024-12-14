@@ -9,6 +9,7 @@
 
 static ring_buf_t cdc_rb;
 static uint8_t cdc_rb_buf[512];
+USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX uint8_t cdc_rx_buf[512];
 USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX uint8_t cdc_tx_buf[512];
 
 static EventGroupHandle_t cdc_evt_handle;
@@ -17,9 +18,9 @@ static StaticEventGroup_t cdc_evt_group;
 #define CDC_EVT_TX_DONE    (0x01 << 0)
 #define CDC_EVT_RX_DONE    (0x01 << 1)
 
-static void cdc_rx_cb(uint8_t *data, uint32_t len)
+static void cdc_rx_cb(uint32_t len)
 {
-    ring_buf_put(&cdc_rb, data, len);
+    ring_buf_put(&cdc_rb, cdc_rx_buf, len);
 
     BaseType_t xHigherPriorityTaskWoken, xResult;
     xHigherPriorityTaskWoken = pdFALSE;
@@ -32,9 +33,11 @@ static void cdc_rx_cb(uint8_t *data, uint32_t len)
     {
         portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
     }
+
+    cdc_recv(cdc_rx_buf, sizeof(cdc_rx_buf));
 }
 
-static void tx_done_cd(void)
+static void tx_done_cb(void)
 {
     BaseType_t xHigherPriorityTaskWoken, xResult;
     xHigherPriorityTaskWoken = pdFALSE;
@@ -49,11 +52,16 @@ static void tx_done_cd(void)
     }
 }
 
+static void cfg_done(void)
+{
+    cdc_recv(cdc_rx_buf, sizeof(cdc_rx_buf));
+}
+
 void cdc_trans_init(void)
 {
     ring_buf_init(&cdc_rb, cdc_rb_buf, sizeof(cdc_rb_buf));
     cdc_evt_handle = xEventGroupCreateStatic(&cdc_evt_group);
-    cdc_register_cb(cdc_rx_cb, tx_done_cd);
+    cdc_register_cb(cdc_rx_cb, tx_done_cb, cfg_done);
 }
 
 int cdc_trans_send(const uint8_t *buf, uint16_t len)

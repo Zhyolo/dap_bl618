@@ -216,14 +216,13 @@ const uint8_t winusbv2_descriptor[] = {
     0x00
 };
 
-USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX uint8_t winusb_read_buf[WINUSB_EP_MPS];
-USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX uint8_t cdc_read_buf[WINUSB_EP_MPS];
-
-static void (*winusb_rx_cb)(uint8_t *, uint32_t) = NULL;
+static void (*winusb_rx_cb)(uint32_t) = NULL;
 static void (*winusb_tx_done)(void) = NULL;
+static void (*winusb_cfg_done)(void) = NULL;
 
-static void (*cdc_rx_cb)(uint8_t *, uint32_t) = NULL;
+static void (*cdc_rx_cb)(uint32_t) = NULL;
 static void (*cdc_tx_done)(void) = NULL;
+static void (*cdc_cfg_done)(void) = NULL;
 
 static void usbd_event_handler(uint8_t busid, uint8_t event)
 {
@@ -240,8 +239,16 @@ static void usbd_event_handler(uint8_t busid, uint8_t event)
             break;
         case USBD_EVENT_CONFIGURED:
             /* setup first out ep read transfer */
-            usbd_ep_start_read(busid, WINUSB_OUT_EP, winusb_read_buf, sizeof(winusb_read_buf));
-            usbd_ep_start_read(busid, CDC_OUT_EP, cdc_read_buf, sizeof(cdc_read_buf));
+            if(NULL != winusb_cfg_done)
+            {
+                winusb_cfg_done();
+            }
+
+            if(NULL != cdc_cfg_done)
+            {
+                cdc_cfg_done();
+            }
+
             break;
         case USBD_EVENT_SET_REMOTE_WAKEUP:
             break;
@@ -257,10 +264,8 @@ static void usbd_winusb_out(uint8_t busid, uint8_t ep, uint32_t nbytes)
 {
     if(NULL != winusb_rx_cb)
     {
-        winusb_rx_cb(winusb_read_buf, nbytes);
+        winusb_rx_cb(nbytes);
     }
-    /* setup next out ep read transfer */
-    usbd_ep_start_read(busid, WINUSB_OUT_EP, winusb_read_buf, sizeof(winusb_read_buf));
 }
 
 static void usbd_winusb_in(uint8_t busid, uint8_t ep, uint32_t nbytes)
@@ -278,13 +283,10 @@ static void usbd_winusb_in(uint8_t busid, uint8_t ep, uint32_t nbytes)
 
 static void usbd_cdc_acm_bulk_out(uint8_t busid, uint8_t ep, uint32_t nbytes)
 {
-    /* TODO: handle cdc read data */
     if(NULL != cdc_rx_cb)
     {
-        cdc_rx_cb(cdc_read_buf, nbytes);
+        cdc_rx_cb(nbytes);
     }
-
-    usbd_ep_start_read(busid, CDC_OUT_EP, cdc_read_buf, sizeof(cdc_read_buf));
 }
 
 static void usbd_cdc_acm_bulk_in(uint8_t busid, uint8_t ep, uint32_t nbytes)
@@ -355,10 +357,11 @@ void winusb_cdc_init(uint8_t busid, uintptr_t reg_base)
     usbd_initialize(busid, reg_base, usbd_event_handler);
 }
 
-void winusb_register_cb(void (*rx_cb)(uint8_t *data, uint32_t len), void (*tx_done)(void))
+void winusb_register_cb(void (*rx_cb)(uint8_t *data, uint32_t len), void (*tx_done)(void), void (*cfg_done)(void))
 {
     winusb_rx_cb = rx_cb;
     winusb_tx_done = tx_done;
+    winusb_cfg_done = cfg_done;
 }
 
 void winusb_send(uint8_t *buf, uint32_t len)
@@ -366,13 +369,24 @@ void winusb_send(uint8_t *buf, uint32_t len)
     usbd_ep_start_write(0, WINUSB_IN_EP, buf, len);
 }
 
-void cdc_register_cb(void (*rx_cb)(uint8_t *data, uint32_t len), void (*tx_done)(void))
+void winusb_recv(uint8_t *buf, uint32_t len)
+{
+    usbd_ep_start_read(0, WINUSB_OUT_EP, buf, len);
+}
+
+void cdc_register_cb(void (*rx_cb)(uint8_t *data, uint32_t len), void (*tx_done)(void), void (*cfg_done)(void))
 {
     cdc_rx_cb = rx_cb;
     cdc_tx_done = tx_done;
+    cdc_cfg_done = cfg_done;
 }
 
 void cdc_send(uint8_t *buf, uint32_t len)
 {
     usbd_ep_start_write(0, CDC_IN_EP, buf, len);
+}
+
+void cdc_recv(uint8_t *buf, uint32_t len)
+{
+    usbd_ep_start_read(0, CDC_OUT_EP, buf, len);
 }

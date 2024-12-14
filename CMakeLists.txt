@@ -83,6 +83,7 @@ target_sources(app PRIVATE
     winusb_cdc.c
     ring_buffer.c
     shell_task.c
+    cmsis_dap.c
 )
 sdk_add_include_directories(.)
 
